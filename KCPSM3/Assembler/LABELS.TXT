@@ -1,0 +1,29 @@
+Table of addresses and their specified labels.
+
+000  cold_start
+007  main_program
+00E  delay_1us
+00F  wait_1us
+012  delay_40us
+013  wait_40us
+017  delay_1ms
+018  wait_1ms
+01C  delay_20ms
+01D  wait_20ms
+021  delay_100ms
+022  wait_100ms
+026  delay_1s
+027  wait_1s
+02B  ISR
+037  ADD_SUM
+03C  COMPARE_80
+040  COMPARE_40
+044  COMPARE_20
+048  COMPARE_10
+04C  COMPARE_08
+050  COMPARE_04
+054  COMPARE_02
+058  COMPARE_01
+05C  LOAD_00
+05D  LED_OUT
+061  STORE_VALUES

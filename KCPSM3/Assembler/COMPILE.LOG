@@ -1,0 +1,1382 @@
+KCPSM3  v1.30.      Ken Chapman (Xilinx-UK) 2005
+
+The assembler for KCPSM3 Programmable State Machine
+
+PASS 1 - Reading input PSM file
+
+; KCPSM3 Program - Practice Picoblaze on Spartan-3A Starter Kit.
+;
+;
+;
+;
+; The 8 LEDs provide a simple 'heart beat' counter driven by interrupts generated at
+; one second intervals.
+;
+;
+;**************************************************************************************
+; Port definitions
+;**************************************************************************************
+;
+;
+;
+CONSTANT LED_port, 80               ;8 simple LEDs. Is an OUTPUT port.
+CONSTANT DATA_IN_PORT, 00         ;input data port. this is an INPUT port.
+CONSTANT LED0, 20
+;**************************************************************************************
+; Special Register usage
+;**************************************************************************************
+;
+; No registers are given special names in this program.
+;
+;**************************************************************************************
+; Scratch Pad Memory Locations
+;**************************************************************************************
+;
+;
+CONSTANT ISR_preserve_s0, 00        ;Preserve s0 contents during ISR
+CONSTANT ISR_preserve_s1, 01        ;Preserve s1 contents during ISR
+CONSTANT ISR_preserve_s2, 02        ;Preserve s2 contents during ISR
+CONSTANT ISR_preserve_s3, 03        ;Preserve s3 contents during ISR
+;
+CONSTANT Count, 04
+CONSTANT left_sum, 05
+CONSTANT right_sum, 06
+;
+;**************************************************************************************
+; Useful data constants
+;**************************************************************************************
+;
+;
+; Constant to define a software delay of 1us. This must be adjusted to reflect the
+; clock applied to KCPSM3. Every instruction executes in 2 clock cycles making the
+; calculation highly predictable. The '6' in the following equation even allows for
+; 'CALL delay_1us' instruction in the initiating code.
+;
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+;
+; Example: For a 50MHz clock the constant value is (50-6)/4 = 11  (0B Hex).
+; For clock rates below 10MHz the value of 1 must be used and the operation will
+; become lower than intended. Interrupts may effect the timing of software based
+; delays.
+;
+CONSTANT delay_1us_constant, 0B
+;
+;
+;
+; ASCII table
+;
+CONSTANT character_a, 61
+CONSTANT character_b, 62
+CONSTANT character_c, 63
+CONSTANT character_d, 64
+CONSTANT character_e, 65
+CONSTANT character_f, 66
+CONSTANT character_g, 67
+CONSTANT character_h, 68
+CONSTANT character_i, 69
+CONSTANT character_j, 6A
+CONSTANT character_k, 6B
+CONSTANT character_l, 6C
+CONSTANT character_m, 6D
+CONSTANT character_n, 6E
+CONSTANT character_o, 6F
+CONSTANT character_p, 70
+CONSTANT character_q, 71
+CONSTANT character_r, 72
+CONSTANT character_s, 73
+CONSTANT character_t, 74
+CONSTANT character_u, 75
+CONSTANT character_v, 76
+CONSTANT character_w, 77
+CONSTANT character_x, 78
+CONSTANT character_y, 79
+CONSTANT character_z, 7A
+CONSTANT character_A, 41
+CONSTANT character_B, 42
+CONSTANT character_C, 43
+CONSTANT character_D, 44
+CONSTANT character_E, 45
+CONSTANT character_F, 46
+CONSTANT character_G, 47
+CONSTANT character_H, 48
+CONSTANT character_I, 49
+CONSTANT character_J, 4A
+CONSTANT character_K, 4B
+CONSTANT character_L, 4C
+CONSTANT character_M, 4D
+CONSTANT character_N, 4E
+CONSTANT character_O, 4F
+CONSTANT character_P, 50
+CONSTANT character_Q, 51
+CONSTANT character_R, 52
+CONSTANT character_S, 53
+CONSTANT character_T, 54
+CONSTANT character_U, 55
+CONSTANT character_V, 56
+CONSTANT character_W, 57
+CONSTANT character_X, 58
+CONSTANT character_Y, 59
+CONSTANT character_Z, 5A
+CONSTANT character_0, 30
+CONSTANT character_1, 31
+CONSTANT character_2, 32
+CONSTANT character_3, 33
+CONSTANT character_4, 34
+CONSTANT character_5, 35
+CONSTANT character_6, 36
+CONSTANT character_7, 37
+CONSTANT character_8, 38
+CONSTANT character_9, 39
+CONSTANT character_colon, 3A
+CONSTANT character_stop, 2E
+CONSTANT character_semi_colon, 3B
+CONSTANT character_minus, 2D
+CONSTANT character_divide, 2F       ;'/'
+CONSTANT character_plus, 2B
+CONSTANT character_comma, 2C
+CONSTANT character_less_than, 3C
+CONSTANT character_greater_than, 3E
+CONSTANT character_equals, 3D
+CONSTANT character_space, 20
+CONSTANT character_CR, 0D           ;carriage return
+CONSTANT character_question, 3F     ;'?'
+CONSTANT character_dollar, 24
+CONSTANT character_exclaim, 21      ;'!'
+CONSTANT character_BS, 08           ;Back Space command character
+CONSTANT direction, 05
+;
+;
+;
+;
+;
+;**************************************************************************************
+; Initialise the system
+;**************************************************************************************
+;
+cold_start: LOAD s0, 00                         ;clear 1 second counter and clear LEDs
+;direction register
+STORE s0, Count
+STORE s0, left_sum
+STORE s0, right_sum
+OUTPUT s0, LED_port
+OUTPUT s0, LED0
+ENABLE INTERRUPT                    ;enable one second heart beat
+;**************************************************************************************
+; Main program
+;**************************************************************************************
+;
+; Display welcome message for design
+;
+main_program: LOAD s4, 01;
+OUTPUT s4, LED0
+CALL delay_1s
+LOAD s4, 00
+OUTPUT s4, LED0
+CALL delay_1s
+JUMP main_program
+;**************************************************************************************
+; Software delay routines
+;**************************************************************************************
+;
+; Delay of 1us.
+;
+; Constant value 'delay_1us_constant' reflects the clock applied to KCPSM3. Every
+; instruction executes in 2 clock cycles making the calculation highly predictable.
+; The '6' in the following equation allows for the 'CALL delay_1us' instruction used
+; in the initiating code. Interrupts may effect software derived delays.
+;
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+;
+; Registers used s0
+;
+delay_1us: LOAD s0, delay_1us_constant
+wait_1us: SUB s0, 01
+JUMP NZ, wait_1us
+RETURN
+;
+; Delay of 40us.
+;
+; Registers used s0, s1
+;
+delay_40us: LOAD s1, 28                         ;40 x 1us = 40us
+wait_40us: CALL delay_1us
+SUB s1, 01
+JUMP NZ, wait_40us
+RETURN
+;
+;
+; Delay of 1ms.
+;
+; Registers used s0, s1, s2
+;
+delay_1ms: LOAD s2, 19                         ;25 x 40us = 1ms
+wait_1ms: CALL delay_40us
+SUB s2, 01
+JUMP NZ, wait_1ms
+RETURN
+;
+; Delay of 20ms.
+;
+; Delay of 20ms used during initialisation.
+;
+; Registers used s0, s1, s2, s3
+;
+delay_20ms: LOAD s3, 14                         ;20 x 1ms = 20ms
+wait_20ms: CALL delay_1ms
+SUB s3, 01
+JUMP NZ, wait_20ms
+RETURN
+delay_100ms: LOAD s3, 64                         ;100 x 1ms = 20ms
+wait_100ms: CALL delay_1ms
+SUB s3, 01
+JUMP NZ, wait_100ms
+RETURN
+;
+; Delay of approximately 1 second.
+;
+; Registers used s0, s1, s2, s3, s4
+;
+delay_1s: LOAD s4, 32                         ;50 x 20ms = 200ms
+wait_1s: CALL delay_20ms
+SUB s4, 01
+JUMP NZ, wait_1s
+RETURN
+;
+;
+;
+;**************************************************************************************
+; Interrupt Service Routine (ISR)
+;**************************************************************************************
+;
+; The interrupt is used purely to provide a 1 second heart beat binary counter pattern
+; on the 8 LEDs.
+;
+ISR: STORE s0, ISR_preserve_s0           ;preserve register
+STORE s1, ISR_preserve_s1
+STORE s2, ISR_preserve_s2
+STORE s3, ISR_preserve_s3
+INPUT s0, DATA_IN_PORT               ;get the input, and values of count, left and right sum
+FETCH s1, Count
+FETCH s2, left_sum
+FETCH s3, right_sum
+COMPARE s0, 80
+JUMP C, ADD_SUM
+XOR s0, FF                          ; NOT operation
+ADD s0, 01                          ; add 1 for 2s compliment
+ADD_SUM: ADD s1, 01
+ADD s3, s0
+ADDCY s2, 00
+COMPARE s1, 00                         ;check if s1 incremented from 255 to 0
+JUMP NZ, STORE_VALUES                ;if not, store the values
+COMPARE_80: COMPARE s2, 80
+JUMP C, COMPARE_40                  ;compare with 40H if less than
+LOAD s2, ff                         ; ff == 11111111
+JUMP LED_OUT
+COMPARE_40: COMPARE s2, 40
+JUMP C, COMPARE_20                  ; compare with 20 if less than
+LOAD s2, fe                         ; fe == 11111110
+JUMP LED_OUT
+COMPARE_20: COMPARE s2, 20
+JUMP C, COMPARE_10
+LOAD s2, fc                         ; fc == 11111100
+JUMP LED_OUT
+COMPARE_10: COMPARE s2, 10
+JUMP C, COMPARE_08
+LOAD s2, f8                         ; f8 == 11111000
+JUMP LED_OUT
+COMPARE_08: COMPARE s2, 08
+JUMP C, COMPARE_04
+LOAD s2, f0                         ; f0 == 11110000
+JUMP LED_OUT
+COMPARE_04: COMPARE s2, 04
+JUMP C, COMPARE_02
+LOAD s2, e0                         ; e0 == 11100000
+JUMP LED_OUT
+COMPARE_02: COMPARE s2, 02
+JUMP C, COMPARE_01
+LOAD s2, c0                         ; c0 == 11000000
+JUMP LED_OUT
+COMPARE_01: COMPARE s2, 01
+JUMP C, LOAD_00
+LOAD s2, 80                         ; 80 == 10000000
+JUMP LED_OUT
+LOAD_00: LOAD s2, 00                         ; 00 == 00000000
+LED_OUT: OUTPUT s2, LED_port
+LOAD s1, 00                         ;counter and sum reset
+LOAD s2, 00
+LOAD s3, 00
+STORE_VALUES: STORE s1, Count
+STORE s2, left_sum
+STORE s3, right_sum
+FETCH s0, ISR_preserve_s0           ;restore register
+FETCH s1, ISR_preserve_s1
+FETCH s2, ISR_preserve_s2
+FETCH s3, ISR_preserve_s3
+RETURNI ENABLE
+;
+;
+;**************************************************************************************
+; Interrupt Vector
+;**************************************************************************************
+;
+ADDRESS 3FF
+JUMP ISR
+;
+;
+
+PASS 2 - Testing Instructions
+
+; KCPSM3 Program - Practice Picoblaze on Spartan-3A Starter Kit.
+;
+;
+;
+;
+; The 8 LEDs provide a simple 'heart beat' counter driven by interrupts generated at
+; one second intervals.
+;
+;
+;**************************************************************************************
+; Port definitions
+;**************************************************************************************
+;
+;
+;
+CONSTANT LED_port, 80;8 simple LEDs. Is an OUTPUT port.
+CONSTANT DATA_IN_PORT, 00;input data port. this is an INPUT port.
+CONSTANT LED0, 20
+;**************************************************************************************
+; Special Register usage
+;**************************************************************************************
+;
+; No registers are given special names in this program.
+;
+;**************************************************************************************
+; Scratch Pad Memory Locations
+;**************************************************************************************
+;
+;
+CONSTANT ISR_preserve_s0, 00;Preserve s0 contents during ISR
+CONSTANT ISR_preserve_s1, 01;Preserve s1 contents during ISR
+CONSTANT ISR_preserve_s2, 02;Preserve s2 contents during ISR
+CONSTANT ISR_preserve_s3, 03;Preserve s3 contents during ISR
+;
+CONSTANT Count, 04
+CONSTANT left_sum, 05
+CONSTANT right_sum, 06
+;
+;**************************************************************************************
+; Useful data constants
+;**************************************************************************************
+;
+;
+; Constant to define a software delay of 1us. This must be adjusted to reflect the
+; clock applied to KCPSM3. Every instruction executes in 2 clock cycles making the
+; calculation highly predictable. The '6' in the following equation even allows for
+; 'CALL delay_1us' instruction in the initiating code.
+;
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+;
+; Example: For a 50MHz clock the constant value is (50-6)/4 = 11  (0B Hex).
+; For clock rates below 10MHz the value of 1 must be used and the operation will
+; become lower than intended. Interrupts may effect the timing of software based
+; delays.
+;
+CONSTANT delay_1us_constant, 0B
+;
+;
+;
+; ASCII table
+;
+CONSTANT character_a, 61
+CONSTANT character_b, 62
+CONSTANT character_c, 63
+CONSTANT character_d, 64
+CONSTANT character_e, 65
+CONSTANT character_f, 66
+CONSTANT character_g, 67
+CONSTANT character_h, 68
+CONSTANT character_i, 69
+CONSTANT character_j, 6A
+CONSTANT character_k, 6B
+CONSTANT character_l, 6C
+CONSTANT character_m, 6D
+CONSTANT character_n, 6E
+CONSTANT character_o, 6F
+CONSTANT character_p, 70
+CONSTANT character_q, 71
+CONSTANT character_r, 72
+CONSTANT character_s, 73
+CONSTANT character_t, 74
+CONSTANT character_u, 75
+CONSTANT character_v, 76
+CONSTANT character_w, 77
+CONSTANT character_x, 78
+CONSTANT character_y, 79
+CONSTANT character_z, 7A
+CONSTANT character_A, 41
+CONSTANT character_B, 42
+CONSTANT character_C, 43
+CONSTANT character_D, 44
+CONSTANT character_E, 45
+CONSTANT character_F, 46
+CONSTANT character_G, 47
+CONSTANT character_H, 48
+CONSTANT character_I, 49
+CONSTANT character_J, 4A
+CONSTANT character_K, 4B
+CONSTANT character_L, 4C
+CONSTANT character_M, 4D
+CONSTANT character_N, 4E
+CONSTANT character_O, 4F
+CONSTANT character_P, 50
+CONSTANT character_Q, 51
+CONSTANT character_R, 52
+CONSTANT character_S, 53
+CONSTANT character_T, 54
+CONSTANT character_U, 55
+CONSTANT character_V, 56
+CONSTANT character_W, 57
+CONSTANT character_X, 58
+CONSTANT character_Y, 59
+CONSTANT character_Z, 5A
+CONSTANT character_0, 30
+CONSTANT character_1, 31
+CONSTANT character_2, 32
+CONSTANT character_3, 33
+CONSTANT character_4, 34
+CONSTANT character_5, 35
+CONSTANT character_6, 36
+CONSTANT character_7, 37
+CONSTANT character_8, 38
+CONSTANT character_9, 39
+CONSTANT character_colon, 3A
+CONSTANT character_stop, 2E
+CONSTANT character_semi_colon, 3B
+CONSTANT character_minus, 2D
+CONSTANT character_divide, 2F;'/'
+CONSTANT character_plus, 2B
+CONSTANT character_comma, 2C
+CONSTANT character_less_than, 3C
+CONSTANT character_greater_than, 3E
+CONSTANT character_equals, 3D
+CONSTANT character_space, 20
+CONSTANT character_CR, 0D;carriage return
+CONSTANT character_question, 3F;'?'
+CONSTANT character_dollar, 24
+CONSTANT character_exclaim, 21;'!'
+CONSTANT character_BS, 08;Back Space command character
+CONSTANT direction, 05
+;
+;
+;
+;
+;
+;**************************************************************************************
+; Initialise the system
+;**************************************************************************************
+;
+cold_start: LOAD s0, 00;clear 1 second counter and clear LEDs
+;direction register
+STORE s0, Count
+STORE s0, left_sum
+STORE s0, right_sum
+OUTPUT s0, LED_port
+OUTPUT s0, LED0
+ENABLE INTERRUPT;enable one second heart beat
+;**************************************************************************************
+; Main program
+;**************************************************************************************
+;
+; Display welcome message for design
+;
+main_program: LOAD s4, 01;
+OUTPUT s4, LED0
+CALL delay_1s
+LOAD s4, 00
+OUTPUT s4, LED0
+CALL delay_1s
+JUMP main_program
+;**************************************************************************************
+; Software delay routines
+;**************************************************************************************
+;
+; Delay of 1us.
+;
+; Constant value 'delay_1us_constant' reflects the clock applied to KCPSM3. Every
+; instruction executes in 2 clock cycles making the calculation highly predictable.
+; The '6' in the following equation allows for the 'CALL delay_1us' instruction used
+; in the initiating code. Interrupts may effect software derived delays.
+;
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+;
+; Registers used s0
+;
+delay_1us: LOAD s0, delay_1us_constant
+wait_1us: SUB s0, 01
+JUMP NZ, wait_1us
+RETURN
+;
+; Delay of 40us.
+;
+; Registers used s0, s1
+;
+delay_40us: LOAD s1, 28;40 x 1us = 40us
+wait_40us: CALL delay_1us
+SUB s1, 01
+JUMP NZ, wait_40us
+RETURN
+;
+;
+; Delay of 1ms.
+;
+; Registers used s0, s1, s2
+;
+delay_1ms: LOAD s2, 19;25 x 40us = 1ms
+wait_1ms: CALL delay_40us
+SUB s2, 01
+JUMP NZ, wait_1ms
+RETURN
+;
+; Delay of 20ms.
+;
+; Delay of 20ms used during initialisation.
+;
+; Registers used s0, s1, s2, s3
+;
+delay_20ms: LOAD s3, 14;20 x 1ms = 20ms
+wait_20ms: CALL delay_1ms
+SUB s3, 01
+JUMP NZ, wait_20ms
+RETURN
+delay_100ms: LOAD s3, 64;100 x 1ms = 20ms
+wait_100ms: CALL delay_1ms
+SUB s3, 01
+JUMP NZ, wait_100ms
+RETURN
+;
+; Delay of approximately 1 second.
+;
+; Registers used s0, s1, s2, s3, s4
+;
+delay_1s: LOAD s4, 32;50 x 20ms = 200ms
+wait_1s: CALL delay_20ms
+SUB s4, 01
+JUMP NZ, wait_1s
+RETURN
+;
+;
+;
+;**************************************************************************************
+; Interrupt Service Routine (ISR)
+;**************************************************************************************
+;
+; The interrupt is used purely to provide a 1 second heart beat binary counter pattern
+; on the 8 LEDs.
+;
+ISR: STORE s0, ISR_preserve_s0;preserve register
+STORE s1, ISR_preserve_s1
+STORE s2, ISR_preserve_s2
+STORE s3, ISR_preserve_s3
+INPUT s0, DATA_IN_PORT;get the input, and values of count, left and right sum
+FETCH s1, Count
+FETCH s2, left_sum
+FETCH s3, right_sum
+COMPARE s0, 80
+JUMP C, ADD_SUM
+XOR s0, FF; NOT operation
+ADD s0, 01; add 1 for 2s compliment
+ADD_SUM: ADD s1, 01
+ADD s3, s0
+ADDCY s2, 00
+COMPARE s1, 00;check if s1 incremented from 255 to 0
+JUMP NZ, STORE_VALUES;if not, store the values
+COMPARE_80: COMPARE s2, 80
+JUMP C, COMPARE_40;compare with 40H if less than
+LOAD s2, ff; ff == 11111111
+JUMP LED_OUT
+COMPARE_40: COMPARE s2, 40
+JUMP C, COMPARE_20; compare with 20 if less than
+LOAD s2, fe; fe == 11111110
+JUMP LED_OUT
+COMPARE_20: COMPARE s2, 20
+JUMP C, COMPARE_10
+LOAD s2, fc; fc == 11111100
+JUMP LED_OUT
+COMPARE_10: COMPARE s2, 10
+JUMP C, COMPARE_08
+LOAD s2, f8; f8 == 11111000
+JUMP LED_OUT
+COMPARE_08: COMPARE s2, 08
+JUMP C, COMPARE_04
+LOAD s2, f0; f0 == 11110000
+JUMP LED_OUT
+COMPARE_04: COMPARE s2, 04
+JUMP C, COMPARE_02
+LOAD s2, e0; e0 == 11100000
+JUMP LED_OUT
+COMPARE_02: COMPARE s2, 02
+JUMP C, COMPARE_01
+LOAD s2, c0; c0 == 11000000
+JUMP LED_OUT
+COMPARE_01: COMPARE s2, 01
+JUMP C, LOAD_00
+LOAD s2, 80; 80 == 10000000
+JUMP LED_OUT
+LOAD_00: LOAD s2, 00; 00 == 00000000
+LED_OUT: OUTPUT s2, LED_port
+LOAD s1, 00;counter and sum reset
+LOAD s2, 00
+LOAD s3, 00
+STORE_VALUES: STORE s1, Count
+STORE s2, left_sum
+STORE s3, right_sum
+FETCH s0, ISR_preserve_s0;restore register
+FETCH s1, ISR_preserve_s1
+FETCH s2, ISR_preserve_s2
+FETCH s3, ISR_preserve_s3
+RETURNI ENABLE
+;
+;
+;**************************************************************************************
+; Interrupt Vector
+;**************************************************************************************
+;
+ADDRESS 3FF
+JUMP ISR
+;
+;
+
+PASS 3 - Resolving addresses and line labels
+
+000 ; KCPSM3 Program - Practice Picoblaze on Spartan-3A Starter Kit.
+000 ;
+000 ;
+000 ;
+000 ;
+000 
+; The 8 LEDs provide a simple 'heart beat' counter driven by interrupts generated at
+000 ; one second intervals.
+000 ;
+000 ;
+000 
+;**************************************************************************************
+000 ; Port definitions
+000 
+;**************************************************************************************
+000 ;
+000 ;
+000 ;
+000 CONSTANT LED_port, 80;8 simple LEDs. Is an OUTPUT port.
+000 CONSTANT DATA_IN_PORT, 00;input data port. this is an INPUT port.
+000 CONSTANT LED0, 20
+000 
+;**************************************************************************************
+000 ; Special Register usage
+000 
+;**************************************************************************************
+000 ;
+000 ; No registers are given special names in this program.
+000 ;
+000 
+;**************************************************************************************
+000 ; Scratch Pad Memory Locations
+000 
+;**************************************************************************************
+000 ;
+000 ;
+000 CONSTANT ISR_preserve_s0, 00;Preserve s0 contents during ISR
+000 CONSTANT ISR_preserve_s1, 01;Preserve s1 contents during ISR
+000 CONSTANT ISR_preserve_s2, 02;Preserve s2 contents during ISR
+000 CONSTANT ISR_preserve_s3, 03;Preserve s3 contents during ISR
+000 ;
+000 CONSTANT Count, 04
+000 CONSTANT left_sum, 05
+000 CONSTANT right_sum, 06
+000 ;
+000 
+;**************************************************************************************
+000 ; Useful data constants
+000 
+;**************************************************************************************
+000 ;
+000 ;
+000 
+; Constant to define a software delay of 1us. This must be adjusted to reflect the
+000 
+; clock applied to KCPSM3. Every instruction executes in 2 clock cycles making the
+000 
+; calculation highly predictable. The '6' in the following equation even allows for
+000 ; 'CALL delay_1us' instruction in the initiating code.
+000 ;
+000 
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+000 ;
+000 ; Example: For a 50MHz clock the constant value is (50-6)/4 = 11  (0B Hex).
+000 
+; For clock rates below 10MHz the value of 1 must be used and the operation will
+000 
+; become lower than intended. Interrupts may effect the timing of software based
+000 ; delays.
+000 ;
+000 CONSTANT delay_1us_constant, 0B
+000 ;
+000 ;
+000 ;
+000 ; ASCII table
+000 ;
+000 CONSTANT character_a, 61
+000 CONSTANT character_b, 62
+000 CONSTANT character_c, 63
+000 CONSTANT character_d, 64
+000 CONSTANT character_e, 65
+000 CONSTANT character_f, 66
+000 CONSTANT character_g, 67
+000 CONSTANT character_h, 68
+000 CONSTANT character_i, 69
+000 CONSTANT character_j, 6A
+000 CONSTANT character_k, 6B
+000 CONSTANT character_l, 6C
+000 CONSTANT character_m, 6D
+000 CONSTANT character_n, 6E
+000 CONSTANT character_o, 6F
+000 CONSTANT character_p, 70
+000 CONSTANT character_q, 71
+000 CONSTANT character_r, 72
+000 CONSTANT character_s, 73
+000 CONSTANT character_t, 74
+000 CONSTANT character_u, 75
+000 CONSTANT character_v, 76
+000 CONSTANT character_w, 77
+000 CONSTANT character_x, 78
+000 CONSTANT character_y, 79
+000 CONSTANT character_z, 7A
+000 CONSTANT character_A, 41
+000 CONSTANT character_B, 42
+000 CONSTANT character_C, 43
+000 CONSTANT character_D, 44
+000 CONSTANT character_E, 45
+000 CONSTANT character_F, 46
+000 CONSTANT character_G, 47
+000 CONSTANT character_H, 48
+000 CONSTANT character_I, 49
+000 CONSTANT character_J, 4A
+000 CONSTANT character_K, 4B
+000 CONSTANT character_L, 4C
+000 CONSTANT character_M, 4D
+000 CONSTANT character_N, 4E
+000 CONSTANT character_O, 4F
+000 CONSTANT character_P, 50
+000 CONSTANT character_Q, 51
+000 CONSTANT character_R, 52
+000 CONSTANT character_S, 53
+000 CONSTANT character_T, 54
+000 CONSTANT character_U, 55
+000 CONSTANT character_V, 56
+000 CONSTANT character_W, 57
+000 CONSTANT character_X, 58
+000 CONSTANT character_Y, 59
+000 CONSTANT character_Z, 5A
+000 CONSTANT character_0, 30
+000 CONSTANT character_1, 31
+000 CONSTANT character_2, 32
+000 CONSTANT character_3, 33
+000 CONSTANT character_4, 34
+000 CONSTANT character_5, 35
+000 CONSTANT character_6, 36
+000 CONSTANT character_7, 37
+000 CONSTANT character_8, 38
+000 CONSTANT character_9, 39
+000 CONSTANT character_colon, 3A
+000 CONSTANT character_stop, 2E
+000 CONSTANT character_semi_colon, 3B
+000 CONSTANT character_minus, 2D
+000 CONSTANT character_divide, 2F;'/'
+000 CONSTANT character_plus, 2B
+000 CONSTANT character_comma, 2C
+000 CONSTANT character_less_than, 3C
+000 CONSTANT character_greater_than, 3E
+000 CONSTANT character_equals, 3D
+000 CONSTANT character_space, 20
+000 CONSTANT character_CR, 0D;carriage return
+000 CONSTANT character_question, 3F;'?'
+000 CONSTANT character_dollar, 24
+000 CONSTANT character_exclaim, 21;'!'
+000 CONSTANT character_BS, 08;Back Space command character
+000 CONSTANT direction, 05
+000 ;
+000 ;
+000 ;
+000 ;
+000 ;
+000 
+;**************************************************************************************
+000 ; Initialise the system
+000 
+;**************************************************************************************
+000 ;
+000 cold_start: LOAD s0, 00;clear 1 second counter and clear LEDs
+001 ;direction register
+001 STORE s0, Count
+002 STORE s0, left_sum
+003 STORE s0, right_sum
+004 OUTPUT s0, LED_port
+005 OUTPUT s0, LED0
+006 ENABLE INTERRUPT;enable one second heart beat
+007 
+;**************************************************************************************
+007 ; Main program
+007 
+;**************************************************************************************
+007 ;
+007 ; Display welcome message for design
+007 ;
+007 main_program: LOAD s4, 01;
+008 OUTPUT s4, LED0
+009 CALL delay_1s
+00A LOAD s4, 00
+00B OUTPUT s4, LED0
+00C CALL delay_1s
+00D JUMP main_program
+00E 
+;**************************************************************************************
+00E ; Software delay routines
+00E 
+;**************************************************************************************
+00E ;
+00E ; Delay of 1us.
+00E ;
+00E 
+; Constant value 'delay_1us_constant' reflects the clock applied to KCPSM3. Every
+00E 
+; instruction executes in 2 clock cycles making the calculation highly predictable.
+00E 
+; The '6' in the following equation allows for the 'CALL delay_1us' instruction used
+00E ; in the initiating code. Interrupts may effect software derived delays.
+00E ;
+00E 
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+00E ;
+00E ; Registers used s0
+00E ;
+00E delay_1us: LOAD s0, delay_1us_constant
+00F wait_1us: SUB s0, 01
+010 JUMP NZ, wait_1us
+011 RETURN
+012 ;
+012 ; Delay of 40us.
+012 ;
+012 ; Registers used s0, s1
+012 ;
+012 delay_40us: LOAD s1, 28;40 x 1us = 40us
+013 wait_40us: CALL delay_1us
+014 SUB s1, 01
+015 JUMP NZ, wait_40us
+016 RETURN
+017 ;
+017 ;
+017 ; Delay of 1ms.
+017 ;
+017 ; Registers used s0, s1, s2
+017 ;
+017 delay_1ms: LOAD s2, 19;25 x 40us = 1ms
+018 wait_1ms: CALL delay_40us
+019 SUB s2, 01
+01A JUMP NZ, wait_1ms
+01B RETURN
+01C ;
+01C ; Delay of 20ms.
+01C ;
+01C ; Delay of 20ms used during initialisation.
+01C ;
+01C ; Registers used s0, s1, s2, s3
+01C ;
+01C delay_20ms: LOAD s3, 14;20 x 1ms = 20ms
+01D wait_20ms: CALL delay_1ms
+01E SUB s3, 01
+01F JUMP NZ, wait_20ms
+020 RETURN
+021 delay_100ms: LOAD s3, 64;100 x 1ms = 20ms
+022 wait_100ms: CALL delay_1ms
+023 SUB s3, 01
+024 JUMP NZ, wait_100ms
+025 RETURN
+026 ;
+026 ; Delay of approximately 1 second.
+026 ;
+026 ; Registers used s0, s1, s2, s3, s4
+026 ;
+026 delay_1s: LOAD s4, 32;50 x 20ms = 200ms
+027 wait_1s: CALL delay_20ms
+028 SUB s4, 01
+029 JUMP NZ, wait_1s
+02A RETURN
+02B ;
+02B ;
+02B ;
+02B 
+;**************************************************************************************
+02B ; Interrupt Service Routine (ISR)
+02B 
+;**************************************************************************************
+02B ;
+02B 
+; The interrupt is used purely to provide a 1 second heart beat binary counter pattern
+02B ; on the 8 LEDs.
+02B ;
+02B ISR: STORE s0, ISR_preserve_s0;preserve register
+02C STORE s1, ISR_preserve_s1
+02D STORE s2, ISR_preserve_s2
+02E STORE s3, ISR_preserve_s3
+02F 
+INPUT s0, DATA_IN_PORT;get the input, and values of count, left and right sum
+030 FETCH s1, Count
+031 FETCH s2, left_sum
+032 FETCH s3, right_sum
+033 COMPARE s0, 80
+034 JUMP C, ADD_SUM
+035 XOR s0, FF; NOT operation
+036 ADD s0, 01; add 1 for 2s compliment
+037 ADD_SUM: ADD s1, 01
+038 ADD s3, s0
+039 ADDCY s2, 00
+03A COMPARE s1, 00;check if s1 incremented from 255 to 0
+03B JUMP NZ, STORE_VALUES;if not, store the values
+03C COMPARE_80: COMPARE s2, 80
+03D JUMP C, COMPARE_40;compare with 40H if less than
+03E LOAD s2, ff; ff == 11111111
+03F JUMP LED_OUT
+040 COMPARE_40: COMPARE s2, 40
+041 JUMP C, COMPARE_20; compare with 20 if less than
+042 LOAD s2, fe; fe == 11111110
+043 JUMP LED_OUT
+044 COMPARE_20: COMPARE s2, 20
+045 JUMP C, COMPARE_10
+046 LOAD s2, fc; fc == 11111100
+047 JUMP LED_OUT
+048 COMPARE_10: COMPARE s2, 10
+049 JUMP C, COMPARE_08
+04A LOAD s2, f8; f8 == 11111000
+04B JUMP LED_OUT
+04C COMPARE_08: COMPARE s2, 08
+04D JUMP C, COMPARE_04
+04E LOAD s2, f0; f0 == 11110000
+04F JUMP LED_OUT
+050 COMPARE_04: COMPARE s2, 04
+051 JUMP C, COMPARE_02
+052 LOAD s2, e0; e0 == 11100000
+053 JUMP LED_OUT
+054 COMPARE_02: COMPARE s2, 02
+055 JUMP C, COMPARE_01
+056 LOAD s2, c0; c0 == 11000000
+057 JUMP LED_OUT
+058 COMPARE_01: COMPARE s2, 01
+059 JUMP C, LOAD_00
+05A LOAD s2, 80; 80 == 10000000
+05B JUMP LED_OUT
+05C LOAD_00: LOAD s2, 00; 00 == 00000000
+05D LED_OUT: OUTPUT s2, LED_port
+05E LOAD s1, 00;counter and sum reset
+05F LOAD s2, 00
+060 LOAD s3, 00
+061 STORE_VALUES: STORE s1, Count
+062 STORE s2, left_sum
+063 STORE s3, right_sum
+064 FETCH s0, ISR_preserve_s0;restore register
+065 FETCH s1, ISR_preserve_s1
+066 FETCH s2, ISR_preserve_s2
+067 FETCH s3, ISR_preserve_s3
+068 RETURNI ENABLE
+069 ;
+069 ;
+069 
+;**************************************************************************************
+069 ; Interrupt Vector
+069 
+;**************************************************************************************
+069 ;
+069 ADDRESS 3FF
+3FF JUMP ISR
+3FF ;
+3FF ;
+
+PASS 4 - Resolving Operands
+
+000 ; KCPSM3 Program - Practice Picoblaze on Spartan-3A Starter Kit.
+000 ;
+000 ;
+000 ;
+000 ;
+000 
+; The 8 LEDs provide a simple 'heart beat' counter driven by interrupts generated at
+000 ; one second intervals.
+000 ;
+000 ;
+000 
+;**************************************************************************************
+000 ; Port definitions
+000 
+;**************************************************************************************
+000 ;
+000 ;
+000 ;
+000 CONSTANT LED_port, 80;8 simple LEDs. Is an OUTPUT port.
+000 CONSTANT DATA_IN_PORT, 00;input data port. this is an INPUT port.
+000 CONSTANT LED0, 20
+000 
+;**************************************************************************************
+000 ; Special Register usage
+000 
+;**************************************************************************************
+000 ;
+000 ; No registers are given special names in this program.
+000 ;
+000 
+;**************************************************************************************
+000 ; Scratch Pad Memory Locations
+000 
+;**************************************************************************************
+000 ;
+000 ;
+000 CONSTANT ISR_preserve_s0, 00;Preserve s0 contents during ISR
+000 CONSTANT ISR_preserve_s1, 01;Preserve s1 contents during ISR
+000 CONSTANT ISR_preserve_s2, 02;Preserve s2 contents during ISR
+000 CONSTANT ISR_preserve_s3, 03;Preserve s3 contents during ISR
+000 ;
+000 CONSTANT Count, 04
+000 CONSTANT left_sum, 05
+000 CONSTANT right_sum, 06
+000 ;
+000 
+;**************************************************************************************
+000 ; Useful data constants
+000 
+;**************************************************************************************
+000 ;
+000 ;
+000 
+; Constant to define a software delay of 1us. This must be adjusted to reflect the
+000 
+; clock applied to KCPSM3. Every instruction executes in 2 clock cycles making the
+000 
+; calculation highly predictable. The '6' in the following equation even allows for
+000 ; 'CALL delay_1us' instruction in the initiating code.
+000 ;
+000 
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+000 ;
+000 ; Example: For a 50MHz clock the constant value is (50-6)/4 = 11  (0B Hex).
+000 
+; For clock rates below 10MHz the value of 1 must be used and the operation will
+000 
+; become lower than intended. Interrupts may effect the timing of software based
+000 ; delays.
+000 ;
+000 CONSTANT delay_1us_constant, 0B
+000 ;
+000 ;
+000 ;
+000 ; ASCII table
+000 ;
+000 CONSTANT character_a, 61
+000 CONSTANT character_b, 62
+000 CONSTANT character_c, 63
+000 CONSTANT character_d, 64
+000 CONSTANT character_e, 65
+000 CONSTANT character_f, 66
+000 CONSTANT character_g, 67
+000 CONSTANT character_h, 68
+000 CONSTANT character_i, 69
+000 CONSTANT character_j, 6A
+000 CONSTANT character_k, 6B
+000 CONSTANT character_l, 6C
+000 CONSTANT character_m, 6D
+000 CONSTANT character_n, 6E
+000 CONSTANT character_o, 6F
+000 CONSTANT character_p, 70
+000 CONSTANT character_q, 71
+000 CONSTANT character_r, 72
+000 CONSTANT character_s, 73
+000 CONSTANT character_t, 74
+000 CONSTANT character_u, 75
+000 CONSTANT character_v, 76
+000 CONSTANT character_w, 77
+000 CONSTANT character_x, 78
+000 CONSTANT character_y, 79
+000 CONSTANT character_z, 7A
+000 CONSTANT character_A, 41
+000 CONSTANT character_B, 42
+000 CONSTANT character_C, 43
+000 CONSTANT character_D, 44
+000 CONSTANT character_E, 45
+000 CONSTANT character_F, 46
+000 CONSTANT character_G, 47
+000 CONSTANT character_H, 48
+000 CONSTANT character_I, 49
+000 CONSTANT character_J, 4A
+000 CONSTANT character_K, 4B
+000 CONSTANT character_L, 4C
+000 CONSTANT character_M, 4D
+000 CONSTANT character_N, 4E
+000 CONSTANT character_O, 4F
+000 CONSTANT character_P, 50
+000 CONSTANT character_Q, 51
+000 CONSTANT character_R, 52
+000 CONSTANT character_S, 53
+000 CONSTANT character_T, 54
+000 CONSTANT character_U, 55
+000 CONSTANT character_V, 56
+000 CONSTANT character_W, 57
+000 CONSTANT character_X, 58
+000 CONSTANT character_Y, 59
+000 CONSTANT character_Z, 5A
+000 CONSTANT character_0, 30
+000 CONSTANT character_1, 31
+000 CONSTANT character_2, 32
+000 CONSTANT character_3, 33
+000 CONSTANT character_4, 34
+000 CONSTANT character_5, 35
+000 CONSTANT character_6, 36
+000 CONSTANT character_7, 37
+000 CONSTANT character_8, 38
+000 CONSTANT character_9, 39
+000 CONSTANT character_colon, 3A
+000 CONSTANT character_stop, 2E
+000 CONSTANT character_semi_colon, 3B
+000 CONSTANT character_minus, 2D
+000 CONSTANT character_divide, 2F;'/'
+000 CONSTANT character_plus, 2B
+000 CONSTANT character_comma, 2C
+000 CONSTANT character_less_than, 3C
+000 CONSTANT character_greater_than, 3E
+000 CONSTANT character_equals, 3D
+000 CONSTANT character_space, 20
+000 CONSTANT character_CR, 0D;carriage return
+000 CONSTANT character_question, 3F;'?'
+000 CONSTANT character_dollar, 24
+000 CONSTANT character_exclaim, 21;'!'
+000 CONSTANT character_BS, 08;Back Space command character
+000 CONSTANT direction, 05
+000 ;
+000 ;
+000 ;
+000 ;
+000 ;
+000 
+;**************************************************************************************
+000 ; Initialise the system
+000 
+;**************************************************************************************
+000 ;
+000 cold_start: LOAD s0, 00;clear 1 second counter and clear LEDs
+001 ;direction register
+001 STORE s0, Count
+002 STORE s0, left_sum
+003 STORE s0, right_sum
+004 OUTPUT s0, LED_port
+005 OUTPUT s0, LED0
+006 ENABLE INTERRUPT;enable one second heart beat
+007 
+;**************************************************************************************
+007 ; Main program
+007 
+;**************************************************************************************
+007 ;
+007 ; Display welcome message for design
+007 ;
+007 main_program: LOAD s4, 01;
+008 OUTPUT s4, LED0
+009 CALL delay_1s
+00A LOAD s4, 00
+00B OUTPUT s4, LED0
+00C CALL delay_1s
+00D JUMP main_program
+00E 
+;**************************************************************************************
+00E ; Software delay routines
+00E 
+;**************************************************************************************
+00E ;
+00E ; Delay of 1us.
+00E ;
+00E 
+; Constant value 'delay_1us_constant' reflects the clock applied to KCPSM3. Every
+00E 
+; instruction executes in 2 clock cycles making the calculation highly predictable.
+00E 
+; The '6' in the following equation allows for the 'CALL delay_1us' instruction used
+00E ; in the initiating code. Interrupts may effect software derived delays.
+00E ;
+00E 
+; delay_1us_constant =  (clock_rate - 6)/4       Where 'clock_rate' is in MHz
+00E ;
+00E ; Registers used s0
+00E ;
+00E delay_1us: LOAD s0, delay_1us_constant
+00F wait_1us: SUB s0, 01
+010 JUMP NZ, wait_1us
+011 RETURN
+012 ;
+012 ; Delay of 40us.
+012 ;
+012 ; Registers used s0, s1
+012 ;
+012 delay_40us: LOAD s1, 28;40 x 1us = 40us
+013 wait_40us: CALL delay_1us
+014 SUB s1, 01
+015 JUMP NZ, wait_40us
+016 RETURN
+017 ;
+017 ;
+017 ; Delay of 1ms.
+017 ;
+017 ; Registers used s0, s1, s2
+017 ;
+017 delay_1ms: LOAD s2, 19;25 x 40us = 1ms
+018 wait_1ms: CALL delay_40us
+019 SUB s2, 01
+01A JUMP NZ, wait_1ms
+01B RETURN
+01C ;
+01C ; Delay of 20ms.
+01C ;
+01C ; Delay of 20ms used during initialisation.
+01C ;
+01C ; Registers used s0, s1, s2, s3
+01C ;
+01C delay_20ms: LOAD s3, 14;20 x 1ms = 20ms
+01D wait_20ms: CALL delay_1ms
+01E SUB s3, 01
+01F JUMP NZ, wait_20ms
+020 RETURN
+021 delay_100ms: LOAD s3, 64;100 x 1ms = 20ms
+022 wait_100ms: CALL delay_1ms
+023 SUB s3, 01
+024 JUMP NZ, wait_100ms
+025 RETURN
+026 ;
+026 ; Delay of approximately 1 second.
+026 ;
+026 ; Registers used s0, s1, s2, s3, s4
+026 ;
+026 delay_1s: LOAD s4, 32;50 x 20ms = 200ms
+027 wait_1s: CALL delay_20ms
+028 SUB s4, 01
+029 JUMP NZ, wait_1s
+02A RETURN
+02B ;
+02B ;
+02B ;
+02B 
+;**************************************************************************************
+02B ; Interrupt Service Routine (ISR)
+02B 
+;**************************************************************************************
+02B ;
+02B 
+; The interrupt is used purely to provide a 1 second heart beat binary counter pattern
+02B ; on the 8 LEDs.
+02B ;
+02B ISR: STORE s0, ISR_preserve_s0;preserve register
+02C STORE s1, ISR_preserve_s1
+02D STORE s2, ISR_preserve_s2
+02E STORE s3, ISR_preserve_s3
+02F 
+INPUT s0, DATA_IN_PORT;get the input, and values of count, left and right sum
+030 FETCH s1, Count
+031 FETCH s2, left_sum
+032 FETCH s3, right_sum
+033 COMPARE s0, 80
+034 JUMP C, ADD_SUM
+035 XOR s0, FF; NOT operation
+036 ADD s0, 01; add 1 for 2s compliment
+037 ADD_SUM: ADD s1, 01
+038 ADD s3, s0
+039 ADDCY s2, 00
+03A COMPARE s1, 00;check if s1 incremented from 255 to 0
+03B JUMP NZ, STORE_VALUES;if not, store the values
+03C COMPARE_80: COMPARE s2, 80
+03D JUMP C, COMPARE_40;compare with 40H if less than
+03E LOAD s2, ff; ff == 11111111
+03F JUMP LED_OUT
+040 COMPARE_40: COMPARE s2, 40
+041 JUMP C, COMPARE_20; compare with 20 if less than
+042 LOAD s2, fe; fe == 11111110
+043 JUMP LED_OUT
+044 COMPARE_20: COMPARE s2, 20
+045 JUMP C, COMPARE_10
+046 LOAD s2, fc; fc == 11111100
+047 JUMP LED_OUT
+048 COMPARE_10: COMPARE s2, 10
+049 JUMP C, COMPARE_08
+04A LOAD s2, f8; f8 == 11111000
+04B JUMP LED_OUT
+04C COMPARE_08: COMPARE s2, 08
+04D JUMP C, COMPARE_04
+04E LOAD s2, f0; f0 == 11110000
+04F JUMP LED_OUT
+050 COMPARE_04: COMPARE s2, 04
+051 JUMP C, COMPARE_02
+052 LOAD s2, e0; e0 == 11100000
+053 JUMP LED_OUT
+054 COMPARE_02: COMPARE s2, 02
+055 JUMP C, COMPARE_01
+056 LOAD s2, c0; c0 == 11000000
+057 JUMP LED_OUT
+058 COMPARE_01: COMPARE s2, 01
+059 JUMP C, LOAD_00
+05A LOAD s2, 80; 80 == 10000000
+05B JUMP LED_OUT
+05C LOAD_00: LOAD s2, 00; 00 == 00000000
+05D LED_OUT: OUTPUT s2, LED_port
+05E LOAD s1, 00;counter and sum reset
+05F LOAD s2, 00
+060 LOAD s3, 00
+061 STORE_VALUES: STORE s1, Count
+062 STORE s2, left_sum
+063 STORE s3, right_sum
+064 FETCH s0, ISR_preserve_s0;restore register
+065 FETCH s1, ISR_preserve_s1
+066 FETCH s2, ISR_preserve_s2
+067 FETCH s3, ISR_preserve_s3
+068 RETURNI ENABLE
+069 ;
+069 ;
+069 
+;**************************************************************************************
+069 ; Interrupt Vector
+069 
+;**************************************************************************************
+069 ;
+3FF ADDRESS 3FF
+3FF JUMP ISR
+3FF ;
+3FF ;
+
+PASS 5 - Writing reformatted PSM file
+           pracpico.fmt
+
+PASS 6 - Writing assembler log file
+           pracpico.log
+
+PASS 7 - Writing coefficient file
+           pracpico.coe
+
+PASS 8 - Writing VHDL memory definition file
+           pracpico.vhd
+
+PASS 9 - Writing Verilog memory definition file
+           pracpico.v
+
+PASS 10 - Writing System Generator memory definition file
+           pracpico.m
+
+PASS 11 - Writing memory definition files
+           pracpico.hex
+           pracpico.dec
+           pracpico.mem
+
+
+KCPSM3 successful.
+
+KCPSM3 complete.
+
